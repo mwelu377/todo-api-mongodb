@@ -1,6 +1,18 @@
 const express = require('express');
+const Joi = require('joi');
 const app = express();
 app.use(express.json()); // Parse JSON bodies
+
+// Logging middleware
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.url}`);
+  next();
+  });
+
+  // Joi validation rule
+const todoSchema = Joi.object({
+  task: Joi.string().min(3).required()
+});
 
 let todos = [
   { id: 1, task: 'Learn Node.js', completed: false },
@@ -22,7 +34,8 @@ app.get('/todos/active', (req, res) => {
   res.status(200).json(active);
 });
 // GET One – Read by ID
-app.get('/todos/:id', (req, res) => {
+app.get('/todos/:id', (req, res, next) => {
+  try {
   const todo = todos.find((t) => t.id === parseInt(req.params.id));
 
   if (!todo) {
@@ -30,12 +43,18 @@ app.get('/todos/:id', (req, res) => {
   }
 
   res.status(200).json(todo);
+  } catch (error) {
+    next(error);
+  }
 });
 
 // POST New – Create
-app.post('/todos', (req, res) => {
-  if (!req.body.task) {
-    return res.status(400).json({ error: 'Task field is required' });
+app.post('/todos', (req, res, next) => {
+   try {
+   const { error } = todoSchema.validate(req.body);
+
+  if (error) {
+    return res.status(400).json({ error: error.details[0].message });
   }
 
   const newTodo = {
@@ -46,11 +65,20 @@ app.post('/todos', (req, res) => {
 
   todos.push(newTodo);
   res.status(201).json(newTodo);
+  } catch (error) {
+    next(error);
+  }
 });
 // PATCH Update – Partial
 app.patch('/todos/:id', (req, res) => {
   const todo = todos.find((t) => t.id === parseInt(req.params.id)); // Array.find()
+
   if (!todo) return res.status(404).json({ message: 'Todo not found' });
+  const { error } = todoSchema.validate(req.body);
+
+  if (error) {
+    return res.status(400).json({ error: error.details[0].message });
+  }
   Object.assign(todo, req.body); // Merge: e.g., {completed: true}
   res.status(200).json(todo);
 });
@@ -70,5 +98,5 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Server error!' });
 });
 
-const PORT = 3002;
+const PORT = process.env.PORT || 3002;
 app.listen(PORT, () => console.log(`Server on port ${PORT}`));
